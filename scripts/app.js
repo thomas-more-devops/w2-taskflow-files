@@ -8,6 +8,7 @@ class TaskFlow {
         this.updateStats();
     }
 
+    // THIS IS NOT A COMMENT
     initializeApp() {
         console.log('TaskFlow initialized successfully!');
         this.showWelcomeMessage();
