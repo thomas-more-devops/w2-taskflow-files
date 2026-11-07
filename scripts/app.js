@@ -1,27 +1,69 @@
+// TaskFlow: all logic of the to-do app lives in this one class.
+// Tasks are objects { id, text, completed, createdAt, completedAt, category, priority }
+// and are saved in the browser's localStorage as JSON.
+
+// The categories a task can have. The keys match the <option> values
+// in #categorySelect and the data-filter values of the filter buttons.
+const CATEGORIES = {
+    work:     { label: 'Work',     icon: '💼' },
+    personal: { label: 'Personal', icon: '🏠' },
+    shopping: { label: 'Shopping', icon: '🛒' }
+};
+
+const PRIORITIES = {
+    high: { label: 'High', rank: 0 },
+    medium: { label: 'Medium', rank: 1 },
+    low: { label: 'Low', rank: 2 }
+};
+
 class TaskFlow {
+
+    // Starts the app: loads saved tasks and the next id, hooks up the
+    // buttons, and draws the task list and statistics on the page.
     constructor() {
         this.tasks = this.loadTasks();
         this.taskIdCounter = this.getNextTaskId();
+        // Which category the list shows: 'all' or a key of CATEGORIES
+        this.currentFilter = 'all';
         this.initializeApp();
         this.bindEvents();
+        this.setupFilters();
+        this.initTheme();
         this.renderTasks();
         this.updateStats();
     }
 
+    // Logs a start message in the console and shows the welcome message.
     initializeApp() {
         console.log('TaskFlow initialized successfully!');
         this.showWelcomeMessage();
     }
 
+    // Logs a welcome message in the console when there are no tasks yet.
     showWelcomeMessage() {
         if (this.tasks.length === 0) {
             console.log('Welcome to TaskFlow! Add your first task to get started.');
         }
     }
 
+    // Connects the "Add Task" button and the Enter key to addTask().
+    // Needs the elements #addTaskBtn and #taskInput in index.html.
+    // Prints a clear error and stops if one of them is missing.
     bindEvents() {
         const addTaskBtn = document.getElementById('addTaskBtn');
         const taskInput = document.getElementById('taskInput');
+
+        // If an id was renamed in index.html, getElementById returns null
+        // and addEventListener would crash with "Cannot read properties of null"
+        if (!addTaskBtn) {
+            console.error('TaskFlow: element with id "addTaskBtn" not found in index.html');
+        }
+        if (!taskInput) {
+            console.error('TaskFlow: element with id "taskInput" not found in index.html');
+        }
+        if (!addTaskBtn || !taskInput) {
+            return;
+        }
 
         addTaskBtn.addEventListener('click', () => this.addTask());
         
@@ -35,6 +77,61 @@ class TaskFlow {
         taskInput.focus();
     }
 
+    // Connects the category filter buttons. A click remembers the chosen
+    // category, marks that button as active and redraws the list.
+    setupFilters() {
+        const buttons = document.querySelectorAll('.filter-btn');
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.currentFilter = btn.dataset.filter;
+                buttons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.renderTasks();
+            });
+        });
+    }
+
+    // Sets up the dark/light theme toggle (#themeToggle).
+    // Start theme: the saved choice, else the system preference, else light.
+    // A click switches the theme and saves it under its own key
+    // ('taskflow_theme') so it never collides with 'taskflow_tasks'.
+    initTheme() {
+        const btn = document.getElementById('themeToggle');
+        if (!btn) return;
+
+        // Sets data-theme on <html> and updates the icon and accessibility labels
+        const apply = (theme) => {
+            document.documentElement.setAttribute('data-theme', theme);
+            const isDark = theme === 'dark';
+            btn.textContent = isDark ? '☀️' : '🌙';
+            btn.setAttribute('aria-pressed', String(isDark));
+            btn.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
+        };
+
+        // Read the saved theme (storage can be blocked, so use try/catch)
+        let saved = null;
+        try {
+            saved = localStorage.getItem('taskflow_theme');
+        } catch (e) { /* storage unavailable */ }
+        if (saved !== 'dark' && saved !== 'light') {
+            saved = null;
+        }
+
+        const prefersDark = window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+        apply(saved || (prefersDark ? 'dark' : 'light'));
+
+        btn.addEventListener('click', () => {
+            const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            apply(next);
+            try {
+                localStorage.setItem('taskflow_theme', next);
+            } catch (e) { /* storage unavailable */ }
+        });
+    }
+
+    // Adds a task from the input box. Shows a warning if the box is empty.
+    // Saves the new task, redraws the list and updates the statistics.
     addTask() {
         const taskInput = document.getElementById('taskInput');
         const taskText = taskInput.value.trim();
@@ -45,12 +142,17 @@ class TaskFlow {
             return;
         }
 
+        const category = document.getElementById('categorySelect').value;
+        const priority = document.getElementById('prioritySelect').value;
+
         const newTask = {
             id: this.taskIdCounter++,
             text: taskText,
             completed: false,
             createdAt: new Date().toISOString(),
-            completedAt: null
+            completedAt: null,
+            category: category,
+            priority: priority
         };
 
         this.tasks.push(newTask);
@@ -64,6 +166,8 @@ class TaskFlow {
         this.showNotification('Task added successfully!', 'success');
     }
 
+    // Deletes the task with this id after the user confirms.
+    // Needs: taskId (number). Deletion is permanent.
     deleteTask(taskId) {
         if (confirm('Are you sure you want to delete this task?')) {
             this.tasks = this.tasks.filter(task => task.id !== taskId);
@@ -74,6 +178,8 @@ class TaskFlow {
         }
     }
 
+    // Switches a task between done and not done, and records when it was completed.
+    // Needs: taskId (number). Called when the user clicks the checkbox.
     toggleTask(taskId) {
         const task = this.tasks.find(task => task.id === taskId);
         if (task) {
@@ -88,6 +194,8 @@ class TaskFlow {
         }
     }
 
+    // Lets the user change a task's text in a popup prompt.
+    // Needs: taskId (number). Cancel or empty text keeps the old text.
     editTask(taskId) {
         const task = this.tasks.find(task => task.id === taskId);
         if (task) {
@@ -101,6 +209,18 @@ class TaskFlow {
         }
     }
 
+    updatePriority(taskId, priority) {
+        const task = this.tasks.find(task => task.id === taskId);
+        if (!task || !PRIORITIES[priority]) return;
+
+        task.priority = priority;
+        this.saveTasks();
+        this.renderTasks();
+    }
+
+    // Draws unfinished tasks first, ordered by priority and then creation date.
+    // Shows the "empty" message instead when there are no tasks.
+    // Needs the elements #tasksList and #emptyState in index.html.
     renderTasks() {
         const tasksList = document.getElementById('tasksList');
         const emptyState = document.getElementById('emptyState');
@@ -114,21 +234,43 @@ class TaskFlow {
         tasksList.style.display = 'flex';
         emptyState.style.display = 'none';
 
-        // Sort tasks: incomplete first, then by creation date
-        const sortedTasks = [...this.tasks].sort((a, b) => {
+        // Only keep the tasks of the chosen category ('all' keeps everything)
+        const visibleTasks = this.currentFilter === 'all'
+            ? this.tasks
+            : this.tasks.filter(task => task.category === this.currentFilter);
+
+        // Sort tasks: incomplete first, then high priority, then newest.
+        const sortedTasks = [...visibleTasks].sort((a, b) => {
             if (a.completed !== b.completed) {
                 return a.completed - b.completed;
+            }
+            const priorityA = PRIORITIES[a.priority] ? a.priority : 'medium';
+            const priorityB = PRIORITIES[b.priority] ? b.priority : 'medium';
+            if (priorityA !== priorityB) {
+                return PRIORITIES[priorityA].rank - PRIORITIES[priorityB].rank;
             }
             return new Date(b.createdAt) - new Date(a.createdAt);
         });
 
-        tasksList.innerHTML = sortedTasks.map(task => `
+        tasksList.innerHTML = sortedTasks.map(task => {
+            // Unknown category (e.g. edited by hand in localStorage) shows as Personal
+            const categoryKey = CATEGORIES[task.category] ? task.category : 'personal';
+            const cat = CATEGORIES[categoryKey];
+            const priorityKey = PRIORITIES[task.priority] ? task.priority : 'medium';
+            return `
             <div class="task-item ${task.completed ? 'completed' : ''}" data-task-id="${task.id}">
                 <div class="task-content">
                     <div class="task-checkbox ${task.completed ? 'checked' : ''}" 
                          onclick="taskFlow.toggleTask(${task.id})">
                     </div>
                     <span class="task-text">${this.escapeHtml(task.text)}</span>
+                    <span class="category-badge category-${categoryKey}">${cat.icon} ${cat.label}</span>
+                    <select class="task-priority priority-${priorityKey}" aria-label="Task priority"
+                            onchange="taskFlow.updatePriority(${task.id}, this.value)">
+                        <option value="high" ${priorityKey === 'high' ? 'selected' : ''}>High</option>
+                        <option value="medium" ${priorityKey === 'medium' ? 'selected' : ''}>Medium</option>
+                        <option value="low" ${priorityKey === 'low' ? 'selected' : ''}>Low</option>
+                    </select>
                 </div>
                 <div class="task-actions">
                     <button class="task-btn edit-btn" onclick="taskFlow.editTask(${task.id})" title="Edit task">
@@ -139,9 +281,11 @@ class TaskFlow {
                     </button>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
+    // Updates the Total / Completed / Pending counters and the task count in the header.
     updateStats() {
         const totalTasks = this.tasks.length;
         const completedTasks = this.tasks.filter(task => task.completed).length;
@@ -156,6 +300,8 @@ class TaskFlow {
         taskCount.textContent = `${totalTasks} ${totalTasks === 1 ? 'task' : 'tasks'}`;
     }
 
+    // Saves all tasks and the id counter to localStorage so they survive a page reload.
+    // Shows an error notification if the browser storage is full or blocked.
     saveTasks() {
         try {
             localStorage.setItem('taskflow_tasks', JSON.stringify(this.tasks));
@@ -166,26 +312,60 @@ class TaskFlow {
         }
     }
 
+    // Reads the saved task list from localStorage.
+    // Returns an empty list if nothing is saved, the JSON is broken,
+    // or the saved value is not a list (for example someone saved 5).
     loadTasks() {
         try {
             const saved = localStorage.getItem('taskflow_tasks');
-            return saved ? JSON.parse(saved) : [];
+            if (!saved) {
+                return [];
+            }
+
+            const parsed = JSON.parse(saved);
+
+            // Valid JSON can still be the wrong type (5, "hello", {}),
+            // so only accept it if it is an array
+            if (!Array.isArray(parsed)) {
+                console.error('Saved tasks are not a list, starting with an empty list:', parsed);
+                return [];
+            }
+
+            // Older tasks without categories or priorities receive safe defaults.
+            // The spread (...task) comes last, so a saved category always wins.
+            return parsed.map(task => ({ category: 'personal', priority: 'medium', ...task }));
         } catch (error) {
             console.error('Failed to load tasks:', error);
             return [];
         }
     }
 
+    // Reads the next free task id from localStorage. Starts at 1 if nothing is saved
+    // or if the saved value is not a number (for example "abc").
     getNextTaskId() {
         try {
             const saved = localStorage.getItem('taskflow_counter');
-            return saved ? parseInt(saved) : 1;
+            if (!saved) {
+                return 1;
+            }
+
+            const id = parseInt(saved, 10);
+
+            // parseInt("abc") gives NaN, which would give new tasks the id NaN
+            if (Number.isNaN(id)) {
+                console.error('Saved task counter is not a number, starting at 1:', saved);
+                return 1;
+            }
+
+            return id;
         } catch (error) {
             console.error('Failed to load task counter:', error);
             return 1;
         }
     }
 
+    // Makes user text safe to put in HTML by replacing special characters (& < > " ').
+    // Prevents someone from injecting HTML or scripts through a task name (XSS).
     escapeHtml(unsafe) {
         return unsafe
             .replace(/&/g, "&amp;")
@@ -195,15 +375,18 @@ class TaskFlow {
             .replace(/'/g, "&#039;");
     }
 
+    // Shows a colored pop-up message in the top right for 3 seconds, and logs it.
+    // Needs: message (text) and type ('success', 'error', 'warning' or 'info').
     showNotification(message, type = 'info') {
         // Simple notification system
         console.log(`[${type.toUpperCase()}] ${message}`);
         
         // Create notification element
+        // top: 76px keeps it below the fixed theme toggle button (top 1rem + 44px)
         const notification = document.createElement('div');
         notification.style.cssText = `
             position: fixed;
-            top: 20px;
+            top: 76px;
             right: 20px;
             padding: 1rem 1.5rem;
             border-radius: 8px;
@@ -247,6 +430,9 @@ class TaskFlow {
     }
 
     // Utility methods for potential future features
+
+    // Downloads all tasks as a JSON file (taskflow_backup.json).
+    // Not used yet: there is no export button in the app.
     exportTasks() {
         const dataStr = JSON.stringify(this.tasks, null, 2);
         const dataBlob = new Blob([dataStr], {type: 'application/json'});
@@ -261,6 +447,8 @@ class TaskFlow {
         this.showNotification('Tasks exported successfully!', 'success');
     }
 
+    // Deletes all tasks at once after the user confirms.
+    // Not used yet: there is no "clear all" button in the app.
     clearAllTasks() {
         if (confirm('Are you sure you want to delete ALL tasks? This cannot be undone.')) {
             this.tasks = [];
@@ -271,6 +459,8 @@ class TaskFlow {
         }
     }
 
+    // Returns an object with task counts: total, completed, pending,
+    // created today and completed today. Not shown in the app yet.
     getTaskStats() {
         const now = new Date();
         const stats = {

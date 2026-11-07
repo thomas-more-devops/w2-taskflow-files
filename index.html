@@ -1,14 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
+    <!-- This is the head of the web page, it contains the title, a link to the .css stylesheet, as well as the font and charset used -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TaskFlow - Task Management App</title>
+
+    <script>
+  (function () {
+    try {
+      var saved = localStorage.getItem('taskflow_theme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  })();
+</script>
+    
     <link rel="stylesheet" href="styles/main.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <button id="themeToggle" class="theme-toggle" type="button"
+        aria-label="Switch to dark theme" aria-pressed="false">🌙</button>
     <div class="container">
+        <!-- Contains the actual header at the top of the page. -->
         <header class="header">
             <div class="header-content">
                 <h1 class="app-title">
@@ -18,23 +35,42 @@
                 <p class="app-subtitle">Streamline your productivity</p>
             </div>
         </header>
-
+        <!-- Contains main page section with input box and button as well an id tag used by scripts/app.js apply functionality to button -->
         <main class="main">
             <div class="task-input-section">
                 <div class="input-container">
                     <input type="text" id="taskInput" placeholder="What needs to be done?" class="task-input">
+                    <select id="categorySelect" class="category-select" aria-label="Task category">
+                        <option value="work">💼 Work</option>
+                        <option value="personal" selected>🏠 Personal</option>
+                        <option value="shopping">🛒 Shopping</option>
+                    </select>
+                    <select id="prioritySelect" class="priority-input" aria-label="Task priority">
+                        <option value="high">High priority</option>
+                        <option value="medium" selected>Medium priority</option>
+                        <option value="low">Low priority</option>
+                    </select>
                     <button id="addTaskBtn" class="add-btn">
                         <span class="add-icon">+</span>
                         Add Task
                     </button>
                 </div>
             </div>
-
+            <!-- Sub-header for tasks section -->
             <div class="tasks-section">
                 <div class="tasks-header">
                     <h2>Your Tasks</h2>
                     <span id="taskCount" class="task-count">0 tasks</span>
                 </div>
+                <div class="category-filters" role="group" aria-label="Filter tasks by category">
+                    <button type="button" class="filter-btn active" data-filter="all">All</button>
+                    <button type="button" class="filter-btn" data-filter="work">💼 Work</button>
+                    <button type="button" class="filter-btn" data-filter="personal">🏠 Personal</button>
+                    <button type="button" class="filter-btn" data-filter="shopping">🛒 Shopping</button>
+                </div>
+                <button id="exportTasksBtn" class="add-btn export-btn" type="button">
+                    ⤓ Export Tasks
+                </button>
                 <div id="tasksList" class="tasks-list">
                     <!-- Tasks will be dynamically added here -->
                 </div>
@@ -44,7 +80,7 @@
                     <p>Add your first task above to get started!</p>
                 </div>
             </div>
-
+            <!-- Contains stats which will dynamically update when add, completing, removing tasks -->
             <div class="stats-section">
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -62,7 +98,7 @@
                 </div>
             </div>
         </main>
-
+        <!-- Contains footer for page, with basic stack info and Year of creation. -->
         <footer class="footer">
             <p>&copy; 2024 TaskFlow. Built with HTML, CSS, and JavaScript.</p>
         </footer>
